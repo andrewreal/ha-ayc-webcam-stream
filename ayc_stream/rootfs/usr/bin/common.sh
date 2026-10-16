@@ -21,4 +21,18 @@ hls_age(){
   [ -s "$HLS" ] || { echo 9999; return; }
   echo $(( $(date +%s) - $(stat -c %Y "$HLS") ))
 }
-redact(){ sed -u -E 's#live2/[^ ]+#live2/REDACTED#g'; }
+# Masks the stream key and splits ffmpeg's \r-terminated progress lines into log lines
+# (sed alone would hold them until the next \n).
+redact(){ python3 -u -c '
+import re,sys
+buf=b""
+while True:
+    c=sys.stdin.buffer.read1(4096)
+    if not c: break
+    buf+=c
+    *lines,buf=re.split(rb"[\r\n]+",buf)
+    for l in lines:
+        if l.strip(): sys.stdout.buffer.write(re.sub(rb"live2/[^ ]+",b"live2/REDACTED",l)+b"\n"); sys.stdout.flush()
+if buf.strip(): sys.stdout.buffer.write(re.sub(rb"live2/[^ ]+",b"live2/REDACTED",buf)+b"\n")
+'; }
+STATS=(-stats -stats_period "${STATS_PERIOD:-30}")

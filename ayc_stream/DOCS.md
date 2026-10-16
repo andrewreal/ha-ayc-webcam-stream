@@ -57,3 +57,8 @@ Fonts: `bold`, `regular`, `mono`, or a path to a .ttf. Colours: `#RRGGBB` or `#R
 **Custom PNGs:** drop the file next to `overlay.json` in the add-on config folder, or into
 `/share/ayc_overlays/` (Samba: the `share` folder), and add an `image` element with its file name as `path`.
 Image changes are picked up live too.
+
+## Checking stream health (1.0.3+)
+Every 30 s the log shows a progress line for `[ingest]` and `[push]`, e.g.
+`frame= 970 fps= 15 ... speed=1.00x`. Both should sit at about `speed=1.0x`. A push speed
+well below 1.0 means YouTube gets too little video. See CHANGELOG.md for version notes.
