@@ -19,6 +19,10 @@ ENC=(-c:v libx264 -preset "$PRESET" -b:v "${BITRATE_K}k" -maxrate "${BITRATE_K}k
 SILENCE=(-thread_queue_size 512 -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100)
 # -readrate 1 paces only the overlay input so it neither floods the queue nor lags edits.
 ov_in(){ echo "-readrate 1 -thread_queue_size 512 -f image2 -pattern_type none -loop 1 -framerate $OV_FPS -i $D/overlay_$1.png"; }
+# Live: the ingest HLS is already CFR at $FPS, so frames are re-timed by count (N) and
+# passed through 1:1 (cfr then never needs to duplicate). An HLS timestamp jump/discontinuity can no longer make a cfr/fps
+# stage repeat one stale frame forever (1.0.5 freeze).
+FILTER_LIVE="[0:v]setpts=N/($FPS*TB),scale=$OUT_W:$OUT_H,format=yuv420p[base];[2:v]format=rgba,setpts=PTS-STARTPTS[ov];[base][ov]overlay=0:0:format=yuv420:eof_action=repeat:repeatlast=1:shortest=1,format=yuv420p[v]"
 FILTER="[0:v]fps=$FPS,scale=$OUT_W:$OUT_H,setpts=PTS-STARTPTS[base];[2:v]format=rgba,setpts=PTS-STARTPTS[ov];[base][ov]overlay=0:0:format=yuv420:eof_action=repeat:repeatlast=1,format=yuv420p[v]"
 
 ensure_assets(){
@@ -29,18 +33,43 @@ ensure_assets(){
   done
 }
 alive(){ [ "$(hls_age)" -lt "$HLS_MAX_AGE" ]; }
+PROG="${HLS_DIR}/push_progress.log"
+FREEZE_WINDOW="${FREEZE_WINDOW:-60}"
+# Last "frame dup" pair from the push's progress lines (dup= is absent until the first dup)
+progress(){ tail -n 20 "$PROG" 2>/dev/null | grep 'frame=' | tail -1 |
+  sed -E 's/.*frame= *([0-9]+).*/\1 &/; s/^([0-9]+) .*dup= *([0-9]+).*/\1 \2/; s/^([0-9]+) [^0-9].*/\1 0/'; }
 
 while true; do
   ensure_assets
   if alive; then
     log "LIVE: HLS fresh, pushing ${OUT_W}x${OUT_H}@${FPS} ${BITRATE_K}k"
     # shellcheck disable=SC2046
-    ffmpeg -nostdin -hide_banner -loglevel warning "${STATS[@]}" \
-      -thread_queue_size 512 -live_start_index -3 -i "$HLS" "${SILENCE[@]}" $(ov_in live) \
-      -filter_complex "$FILTER" -map "[v]" -map 1:a "${ENC[@]}" "$URL" > >(redact) 2>&1 &
+    # -shortest: when the HLS video ends (ingest restarted -> #EXT-X-ENDLIST) the push exits
+    # and is restarted here, instead of cfr repeating the last frame forever (1.0.5 freeze).
+    : > "$PROG"
+    ffmpeg -nostdin -y -hide_banner -loglevel warning "${STATS[@]}" \
+      -fflags +discardcorrupt+genpts -thread_queue_size 512 -live_start_index -3 -i "$HLS" "${SILENCE[@]}" $(ov_in live) \
+      -filter_complex "$FILTER_LIVE" -map "[v]" -map 1:a -shortest "${ENC[@]}" "$URL" > >(redact | tee -a "$PROG") 2>&1 &
     PID=$!
     stale=0
+    # Frozen-input watchdog: every 30 s compare progress with the sample from FREEZE_WINDOW ago
+    t0=$(date +%s); hist=()
     while kill -0 "$PID" 2>/dev/null; do
+      now=$(date +%s)
+      if [ $((now - t0)) -ge 30 ]; then
+        t0=$now
+        read -r f1 d1 <<<"$(progress)"; hist+=("${f1:-0} ${d1:-0}")
+        n=$(( FREEZE_WINDOW / 30 ))
+        if [ "${#hist[@]}" -gt "$n" ]; then
+          read -r f0 d0 <<<"${hist[$(( ${#hist[@]} - 1 - n ))]}"
+          df=$(( ${f1:-0} - f0 )); dd=$(( ${d1:-0} - d0 ))
+          if [ "$df" -le 0 ] || [ $((dd * 2)) -gt "$df" ]; then
+            log "frozen input, restarting (frames +$df, dup +$dd in ${FREEZE_WINDOW}s)"
+            kill "$PID" 2>/dev/null; sleep 1; kill -9 "$PID" 2>/dev/null
+            break
+          fi
+        fi
+      fi
       if alive; then stale=0; else
         stale=$((stale + 2))
         if [ "$stale" -ge "$STALE_GRACE" ]; then
@@ -56,7 +85,7 @@ while true; do
   else
     log "FALLBACK: camera down, looping fallback.mp4 (re-check every 45s)"
     # shellcheck disable=SC2046
-    ffmpeg -nostdin -hide_banner -loglevel warning "${STATS[@]}" -stream_loop -1 -re -i "$FALLBACK" \
+    ffmpeg -nostdin -y -hide_banner -loglevel warning "${STATS[@]}" -stream_loop -1 -re -i "$FALLBACK" \
       "${SILENCE[@]}" $(ov_in offline) \
       -filter_complex "$FILTER" -map "[v]" -map 1:a -t 45 "${ENC[@]}" "$URL" 2>&1 | redact
   fi

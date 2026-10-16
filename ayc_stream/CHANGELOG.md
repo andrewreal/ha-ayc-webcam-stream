@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.6
+- Fix the frozen YouTube picture (push repeating one frame forever, `dup=` climbing,
+  "More than 1000 frames duplicated"). Reproduced locally: when the ingest ffmpeg restarts
+  it ends the HLS playlist (`#EXT-X-ENDLIST`). The push's camera video then hit EOF, but the
+  overlay filter kept emitting frames driven by the endless overlay/silence inputs, and cfr
+  duplicated the last camera frame. The HLS-freshness watchdog never fired because the new
+  playlist was fresh.
+  - Push overlay uses `shortest=1` and the output `-shortest`, so the push exits when the camera
+    video ends and the loop restarts it about 2 s later.
+  - Push re-times live frames by count (`setpts=N/(FPS*TB)`; the ingest HLS is already CFR) and
+    reads HLS with `-fflags +discardcorrupt+genpts`, so timestamp jumps/discontinuities can't
+    cause duplication.
+  - New frozen-input watchdog: every 30 s it compares push progress with 60 s earlier. If the
+    frame count stalls or more than half the new frames are duplicates, it logs
+    `[push] frozen input, restarting` and restarts the push.
+- Ingest: real-time timestamps are forced strictly increasing (`max(..., PREV_OUTPTS+1)`), and
+  HLS uses `independent_segments+program_date_time+temp_file`.
+
 ## 1.0.5
 - Fix ingest running at ~0.4x real time ("No data" / "not receiving enough video"). The AYC
   camera delivers about 6 fps whatever `&fps=` asks for, and the wallclock input timestamps
