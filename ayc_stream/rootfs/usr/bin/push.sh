@@ -14,11 +14,11 @@ HLS_MAX_AGE=20     # HLS older than this = camera/ingest down
 STALE_GRACE=12     # seconds stale before killing the live push
 OV_FPS="${OVERLAY_FPS:-2}"   # how often ffmpeg re-reads the overlay PNG
 ENC=(-c:v libx264 -preset "$PRESET" -b:v "${BITRATE_K}k" -maxrate "${BITRATE_K}k" -bufsize "$((BITRATE_K * 2))k"
-     -g $((FPS * 2)) -keyint_min $((FPS * 2)) -sc_threshold 0 -pix_fmt yuv420p
+     -g $((FPS * 2)) -keyint_min $((FPS * 2)) -sc_threshold 0 -tune zerolatency -threads 3 -pix_fmt yuv420p
      -c:a aac -b:a 64k -ar 44100 -f "$OUT_FMT")
-SILENCE=(-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100)
-ov_in(){ echo "-f image2 -pattern_type none -loop 1 -framerate $OV_FPS -i $D/overlay_$1.png"; }
-FILTER="[0:v]fps=$FPS,scale=$OUT_W:$OUT_H,setpts=PTS-STARTPTS[base];[2:v]format=rgba,setpts=PTS-STARTPTS[ov];[base][ov]overlay=0:0:format=auto:eof_action=repeat,format=yuv420p[v]"
+SILENCE=(-thread_queue_size 64 -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100)
+ov_in(){ echo "-thread_queue_size 64 -f image2 -pattern_type none -loop 1 -framerate $OV_FPS -i $D/overlay_$1.png"; }
+FILTER="[0:v]fps=$FPS,scale=$OUT_W:$OUT_H,setpts=PTS-STARTPTS[base];[2:v]format=rgba,setpts=PTS-STARTPTS[ov];[base][ov]overlay=0:0:format=yuv420:eof_action=repeat:repeatlast=1,format=yuv420p[v]"
 
 ensure_assets(){
   [ -s "$D/caption.txt" ] || echo "Axmouth  |  Tide data loading  |  Not for navigation" > "$D/caption.txt"
@@ -35,7 +35,7 @@ while true; do
     log "LIVE: HLS fresh, pushing ${OUT_W}x${OUT_H}@${FPS} ${BITRATE_K}k"
     # shellcheck disable=SC2046
     ffmpeg -nostdin -hide_banner -loglevel warning \
-      -live_start_index -1 -i "$HLS" "${SILENCE[@]}" $(ov_in live) \
+      -re -thread_queue_size 512 -live_start_index -3 -i "$HLS" "${SILENCE[@]}" $(ov_in live) \
       -filter_complex "$FILTER" -map "[v]" -map 1:a "${ENC[@]}" "$URL" > >(redact) 2>&1 &
     PID=$!
     stale=0
