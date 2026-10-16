@@ -17,10 +17,13 @@ while true; do
   LR=0
   if [ "${LOWRES:-0}" -gt 0 ] && [ "${SRC_W:-0}" -ge $((OUT_W * 2)) ]; then LR=$LOWRES; fi
   log "connecting to camera (${SRC_W:-?}px wide, lowres=$LR) -> HLS ${OUT_W}x${OUT_H}@${FPS}"
+  # Timestamps are re-stamped from the real-time clock inside the filter graph (settb/setpts
+  # RTCTIME), so the fps filter duplicates frames up to $FPS and HLS runs at real time even
+  # when the camera sends ~6 fps, whatever the demuxer/ffmpeg version does with wallclock.
   # -tls_verify 0: camera certificate has expired
   ffmpeg -nostdin -hide_banner -loglevel warning "${STATS[@]}" -tls_verify 0 -rw_timeout 15000000 \
-    -threads 4 -lowres "$LR" -f mjpeg -use_wallclock_as_timestamps 1 -fflags +genpts -i "$CAM" \
-    -an -filter_threads 2 -vf "fps=$FPS,scale=$OUT_W:$OUT_H:flags=fast_bilinear,format=yuv420p" -fps_mode cfr -r "$FPS" \
+    -threads 4 -lowres "$LR" -f mjpeg -use_wallclock_as_timestamps 1 -i "$CAM" \
+    -an -filter_threads 2 -vf "settb=1/1000,setpts=(RTCTIME-RTCSTART)/1000,fps=$FPS,scale=$OUT_W:$OUT_H:flags=fast_bilinear,format=yuv420p" -fps_mode cfr -r "$FPS" \
     -c:v libx264 -preset ultrafast -tune zerolatency -threads 2 -b:v $((BITRATE_K * 2))k \
     -g $((FPS * 2)) -keyint_min $((FPS * 2)) -sc_threshold 0 \
     -f hls -hls_time 2 -hls_list_size 8 -hls_flags delete_segments+append_list \

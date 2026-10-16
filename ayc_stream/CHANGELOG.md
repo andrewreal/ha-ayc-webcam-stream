@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.5
+- Fix ingest running at ~0.4x real time ("No data" / "not receiving enough video"). The AYC
+  camera delivers about 6 fps whatever `&fps=` asks for, and the wallclock input timestamps
+  were not taking effect on the add-on's ffmpeg (Alpine 3.20, ffmpeg 6.1). Each frame
+  was then treated as 1/15 s, so 6 real fps became 0.4x. Frames are now re-stamped from the real-time
+  clock in the filter graph (`settb=1/1000,setpts=(RTCTIME-RTCSTART)/1000`) before `fps=`, so
+  frames are duplicated up to the configured fps and HLS runs at 1.0x regardless of camera rate.
+- Removed `-fflags +genpts` from the camera input.
+
 ## 1.0.4
 - Ingest made cheaper: MJPEG decode with `-threads 4`, scaling with `flags=fast_bilinear`,
   `-filter_threads 2`, x264 `-threads 2`, fps filter before scale (drops frames before scaling).

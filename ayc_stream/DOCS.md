@@ -76,3 +76,8 @@ Snapshots work the same way: `.../axis-cgi/jpg/image.cgi?resolution=640x360`.
 applies when the camera frame is at least twice the output width, e.g. 1080p camera with
 `output_height` 540 or lower, or a 4K camera at 720p. The `[ingest] connecting ...` log line shows the
 detected width and whether lowres is in use.
+
+## Camera frame rate (1.0.5+)
+The AYC camera sends about 6 frames/s (measured at 1280x720; `&fps=15` is ignored). The add-on
+stamps frames with real time and repeats them to reach the `fps` option, so the stream stays
+real time. Setting `fps` to 6-8 saves CPU and bandwidth with no visible loss.
