@@ -1,0 +1,16 @@
+{
+  "_help": "Coordinates are in a 1280x720 reference frame and scale to the output size. Negative x/y count from the right/bottom edge. 'show' = always | live | offline. Edit this file while running; changes appear within ~2 s.",
+  "ref_width": 1280,
+  "ref_height": 720,
+  "elements": [
+    {"id": "club", "type": "text", "text": "Axe Yacht Club", "x": 16, "y": 16,
+     "font": "bold", "size": 22, "color": "#FFFFFF", "box": "#000000B0", "pad": 8},
+    {"id": "caption", "type": "text", "text_file": "caption.txt", "x": 16, "y": -16,
+     "font": "bold", "size": 21, "color": "#FFFFFF", "box": "#0000008C", "pad": 8, "max_width": 1248},
+    {"id": "chart", "type": "chart", "x": -16, "y": 16, "w": 400, "h": 220},
+    {"id": "offline1", "type": "text", "show": "offline", "text": "Live feed temporarily unavailable - camera offline",
+     "x": "center", "y": 300, "font": "bold", "size": 30, "color": "#FFFF00", "box": "#000000B3", "pad": 12},
+    {"id": "offline2", "type": "text", "show": "offline", "text": "Showing recent footage - live view resumes automatically",
+     "x": "center", "y": 360, "font": "bold", "size": 20, "color": "#FFFFFF", "box": "#00000099", "pad": 8}
+  ]
+}

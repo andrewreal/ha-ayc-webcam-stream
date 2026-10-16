@@ -1,0 +1,59 @@
+# AYC Webcam Stream
+
+Streams the Axe Yacht Club harbour webcam to YouTube Live at 720p / 15 fps (~1.5 Mbps)
+with a live tide caption, the "Axe Yacht Club" label, a tide chart (top right) and an
+automatic fallback loop with an "camera offline" notice when the camera drops.
+
+## Install
+1. Settings → Add-ons → Add-on Store → ⋮ → **Repositories**, add `https://github.com/andrewreal/ha-ayc-webcam-stream`
+   (or copy the `ayc_stream` folder into `/addons` on the Pi via the Samba/SSH add-on,
+   then ⋮ → **Check for updates** and it appears under *Local add-ons*).
+2. Open **AYC Webcam Stream** → **Install** (builds locally on the Pi; takes a few minutes).
+3. **Configuration** tab: paste your YouTube stream key into `stream_key`. Save.
+4. **Info** tab: turn on **Start on boot** and **Watchdog**, then **Start**.
+5. Check the **Log** tab for `LIVE: HLS fresh, pushing 1280x720@15`. In YouTube Studio the
+   stream goes live (or press Go live if auto-start is off).
+
+## Options
+| Option | Default | Notes |
+|---|---|---|
+| stream_key | – | YouTube stream key (required, kept secret) |
+| output_height | 720 | 720 recommended on a Pi 4 |
+| fps | 15 | camera only delivers ~1–2 fps |
+| bitrate_k | 1500 | video bitrate in kbps |
+| x264_preset | ultrafast | `veryfast` gives better quality if CPU allows |
+
+## Notes
+- Tides: UKHO EasyTide Lyme Regis (0028), OpenWaters fallback. Not for navigation.
+- Fallback clip refreshes every 20 min into `/data/fallback.mp4`.
+- Keep an eye on Pi temperature (Settings → System → Hardware); use a heatsink/fan case.
+- Upload needs ~1.6 Mbps continuously (~0.5 TB/month).
+
+## Editing overlays live (no restart)
+All graphics (club name, tide caption, tide chart, offline notice, any logos) are drawn
+into one transparent full-frame PNG by `overlay.py` every 2 s, from the layout file
+**`overlay.json` in the add-on config folder** – in Home Assistant that is
+`/addon_configs/<id>_ayc_stream/overlay.json` (open it with the File editor, Studio Code
+Server or Samba add-on). It's seeded from the default on first start.
+ffmpeg re-reads the PNG continuously, so saving the JSON changes the stream within ~2–3 s.
+If the JSON is invalid the last good layout is kept and an error is logged.
+Delete the file and restart to go back to the default.
+
+Coordinates use a 1280×720 reference and scale to the output. Negative `x`/`y` count from
+the right/bottom edge; `"center"` or `"center+40"` centres. `show`: `always`, `live`
+(camera up) or `offline` (fallback only). `"enabled": false` hides an element.
+
+Element types:
+```json
+{"id":"club","type":"text","text":"Axe Yacht Club","x":16,"y":16,"font":"bold","size":22,
+ "color":"#FFFFFF","box":"#000000B0","pad":8}
+{"id":"caption","type":"text","text_file":"caption.txt","x":16,"y":-16,"size":21,"max_width":1248}
+{"id":"clock","type":"text","text":"%H:%M","strftime":true,"x":-16,"y":-60}
+{"id":"chart","type":"chart","x":-16,"y":16,"w":400,"h":220,"font_scale":1.0}
+{"id":"logo","type":"image","path":"logo.png","x":-16,"y":-60,"h":60,"opacity":0.9}
+```
+Fonts: `bold`, `regular`, `mono`, or a path to a .ttf. Colours: `#RRGGBB` or `#RRGGBBAA`.
+
+**Custom PNGs:** drop the file next to `overlay.json` in the add-on config folder, or into
+`/share/ayc_overlays/` (Samba: the `share` folder), and add an `image` element with its file name as `path`.
+Image changes are picked up live too.
