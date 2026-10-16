@@ -11,6 +11,8 @@ OUTPUT_HEIGHT="$(bashio::config 'output_height' 720)"; export OUTPUT_HEIGHT
 FPS="$(bashio::config 'fps' 15)"; export FPS
 BITRATE_K="$(bashio::config 'bitrate_k' 1500)"; export BITRATE_K
 X264_PRESET="$(bashio::config 'x264_preset' ultrafast)"; export X264_PRESET
+DECODE_LOWRES="$(bashio::config 'decode_lowres' 1)"; export DECODE_LOWRES
+CAMERA_RESOLUTION="$(bashio::config 'camera_resolution' '')"; [ "$CAMERA_RESOLUTION" = "null" ] && CAMERA_RESOLUTION=""; export CAMERA_RESOLUTION
 mkdir -p /data "$HLS_DIR"
 # Layout lives in the add-on config folder (HA: /addon_configs/<id>_ayc_stream/) so it can be edited with File editor/Samba
 if [ -d /config ]; then export AYC_LAYOUT=/config/overlay.json; fi

@@ -21,10 +21,15 @@ hls_age(){
   [ -s "$HLS" ] || { echo 9999; return; }
   echo $(( $(date +%s) - $(stat -c %Y "$HLS") ))
 }
-# Masks the stream key and splits ffmpeg's \r-terminated progress lines into log lines
+# Prefixes ffmpeg progress lines with [LOG_TAG], masks the stream key and splits ffmpeg's \r-terminated progress lines into log lines
 # (sed alone would hold them until the next \n).
 redact(){ python3 -u -c '
 import re,sys
+tag=("["+sys.argv[1]+"] ").encode() if len(sys.argv)>1 and sys.argv[1] else b""
+def out(l):
+    l=re.sub(rb"live2/[^ ]+",b"live2/REDACTED",l)
+    if l.lstrip().startswith(b"frame="): l=tag+l.strip()
+    sys.stdout.buffer.write(l+b"\n"); sys.stdout.flush()
 buf=b""
 while True:
     c=sys.stdin.buffer.read1(4096)
@@ -32,7 +37,9 @@ while True:
     buf+=c
     *lines,buf=re.split(rb"[\r\n]+",buf)
     for l in lines:
-        if l.strip(): sys.stdout.buffer.write(re.sub(rb"live2/[^ ]+",b"live2/REDACTED",l)+b"\n"); sys.stdout.flush()
-if buf.strip(): sys.stdout.buffer.write(re.sub(rb"live2/[^ ]+",b"live2/REDACTED",buf)+b"\n")
-'; }
+        if l.strip(): out(l)
+if buf.strip(): out(buf)
+' "$LOG_TAG"; }
 STATS=(-stats -stats_period "${STATS_PERIOD:-30}")
+LOWRES="${DECODE_LOWRES:-1}"
+CAM_RES="${CAMERA_RESOLUTION:-}"

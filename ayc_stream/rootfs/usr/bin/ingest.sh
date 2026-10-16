@@ -5,15 +5,23 @@ LOG_TAG=ingest
 # shellcheck source=/dev/null
 . /usr/bin/common.sh
 CAM="${CAMERA_URL:-https://webcam.aycwebcam.co.uk/axis-cgi/mjpg/video.cgi}"
+if [ -n "$CAM_RES" ]; then  # Axis VAPIX: ask the camera for a smaller stream
+  case "$CAM" in *\?*) CAM="$CAM&resolution=$CAM_RES&fps=$FPS";; *) CAM="$CAM?resolution=$CAM_RES&fps=$FPS";; esac
+fi
 mkdir -p "$HLS_DIR"
 while true; do
   rm -f "$HLS_DIR"/*.ts "$HLS_DIR"/*.m3u8
-  log "connecting to camera -> HLS ${OUT_W}x${OUT_H}@${FPS}"
+  # Half/quarter-res MJPEG decode (-lowres) only when the source is >= 2x the output width
+  SRC_W=$(timeout 20 ffprobe -v error -tls_verify 0 -f mjpeg -select_streams v:0 -show_entries stream=width \
+          -of csv=p=0 "$CAM" 2>/dev/null | head -1)
+  LR=0
+  if [ "${LOWRES:-0}" -gt 0 ] && [ "${SRC_W:-0}" -ge $((OUT_W * 2)) ]; then LR=$LOWRES; fi
+  log "connecting to camera (${SRC_W:-?}px wide, lowres=$LR) -> HLS ${OUT_W}x${OUT_H}@${FPS}"
   # -tls_verify 0: camera certificate has expired
   ffmpeg -nostdin -hide_banner -loglevel warning "${STATS[@]}" -tls_verify 0 -rw_timeout 15000000 \
-    -f mjpeg -use_wallclock_as_timestamps 1 -fflags +genpts -i "$CAM" \
-    -an -vf "fps=$FPS,scale=$OUT_W:$OUT_H,format=yuv420p" -fps_mode cfr -r "$FPS" \
-    -c:v libx264 -preset ultrafast -tune zerolatency -b:v $((BITRATE_K * 2))k \
+    -threads 4 -lowres "$LR" -f mjpeg -use_wallclock_as_timestamps 1 -fflags +genpts -i "$CAM" \
+    -an -filter_threads 2 -vf "fps=$FPS,scale=$OUT_W:$OUT_H:flags=fast_bilinear,format=yuv420p" -fps_mode cfr -r "$FPS" \
+    -c:v libx264 -preset ultrafast -tune zerolatency -threads 2 -b:v $((BITRATE_K * 2))k \
     -g $((FPS * 2)) -keyint_min $((FPS * 2)) -sc_threshold 0 \
     -f hls -hls_time 2 -hls_list_size 8 -hls_flags delete_segments+append_list \
     -hls_segment_filename "$HLS_DIR/seg%03d.ts" "$HLS" 2>&1 | redact

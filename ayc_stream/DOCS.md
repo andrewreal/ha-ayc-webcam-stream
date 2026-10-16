@@ -62,3 +62,17 @@ Image changes are picked up live too.
 Every 30 s the log shows a progress line for `[ingest]` and `[push]`, e.g.
 `frame= 970 fps= 15 ... speed=1.00x`. Both should sit at about `speed=1.0x`. A push speed
 well below 1.0 means YouTube gets too little video. See CHANGELOG.md for version notes.
+
+## Camera resolution and CPU (1.0.4+)
+The AYC camera is an Axis camera with a 1920x1080 native image. Decoding 1080p MJPEG is the
+most expensive step on a Pi. The camera (Axis VAPIX) can scale the stream itself. The
+add-on appends the parameters to the camera URL:
+`.../axis-cgi/mjpg/video.cgi?resolution=1280x720&fps=15`.
+Set **camera_resolution** to `1280x720` (matches 720p output) or `640x360` for the lightest load.
+Supported sizes include 1920x1080, 1280x720, 1024x640, 800x450, 640x360, 480x270 and 320x180.
+Snapshots work the same way: `.../axis-cgi/jpg/image.cgi?resolution=640x360`.
+
+**decode_lowres** (default 1) decodes the MJPEG at 1/2 (1), 1/4 (2) or 1/8 (3) size. It only
+applies when the camera frame is at least twice the output width, e.g. 1080p camera with
+`output_height` 540 or lower, or a 4K camera at 720p. The `[ingest] connecting ...` log line shows the
+detected width and whether lowres is in use.
