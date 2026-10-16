@@ -1,5 +1,5 @@
 name: AYC Webcam Stream
-version: "1.0.0"
+version: "1.0.1"
 slug: ayc_stream
 description: Axe Yacht Club webcam to YouTube Live, with tide caption, tide chart and offline fallback
 url: https://github.com/andrewreal/ha-ayc-webcam-stream
