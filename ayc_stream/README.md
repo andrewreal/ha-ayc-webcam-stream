@@ -22,12 +22,18 @@ automatic fallback loop with an "camera offline" notice when the camera drops.
 | fps | 15 | camera only delivers ~1–2 fps |
 | bitrate_k | 1500 | video bitrate in kbps |
 | x264_preset | ultrafast | `veryfast` gives better quality if CPU allows |
+| shingle_auto | suggest | `off` / `suggest` / `apply` — shingle-bar outline auto-update |
 
 ## Notes
 - Tides: UKHO EasyTide Lyme Regis (0028), OpenWaters fallback. Not for navigation.
 - Fallback clip refreshes every 20 min into `/data/fallback.mp4`.
 - Keep an eye on Pi temperature (Settings → System → Hardware); use a heatsink/fan case.
 - Upload needs ~1.6 Mbps continuously (~0.5 TB/month).
+
+## Shingle bar (1.0.7+)
+A dashed amber outline of the harbour shingle bar is drawn from `shingle_bar.json` in the
+add-on config folder (seeded on first start). Edits appear live within ~2 s. See DOCS.md
+for the suggest/apply auto-update worker.
 
 ## Editing overlays live (no restart)
 All graphics (club name, tide caption, tide chart, offline notice, any logos) are drawn

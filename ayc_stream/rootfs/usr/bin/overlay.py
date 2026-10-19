@@ -174,6 +174,124 @@ def render_chart(w: int, h: int, el: dict) -> Image.Image:
     return img
 
 
+
+def draw_dashed_polyline(d, pts, fill, width=2, dash=14, gap=8):
+    """Draw a dashed polyline (pts are already scaled pixel coords)."""
+    if len(pts) < 2 or width <= 0:
+        return
+    import math
+    for i in range(len(pts) - 1):
+        x0, y0 = pts[i]
+        x1, y1 = pts[i + 1]
+        seg = math.hypot(x1 - x0, y1 - y0)
+        if seg < 1:
+            continue
+        dx, dy = (x1 - x0) / seg, (y1 - y0) / seg
+        pos = 0.0
+        on = True
+        while pos < seg:
+            plen = dash if on else gap
+            npos = min(seg, pos + plen)
+            if on:
+                d.line([(x0 + dx * pos, y0 + dy * pos), (x0 + dx * npos, y0 + dy * npos)],
+                       fill=fill, width=max(1, int(width)))
+            pos = npos
+            on = not on
+
+
+def draw_polylines(canvas, d, el, sc):
+    """Draw one or more polylines from inline points or a JSON file.
+
+    Element fields:
+      file: path to shingle_bar.json (preferred) OR
+      polylines: [{"points":[[x,y],...]}, ...] in ref coords
+      style overrides: color, outline, width, outline_width, dash, label, label_color, label_box
+    """
+    import math
+    data = None
+    if el.get("file"):
+        f = find_file(el["file"])
+        if not f:
+            return
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception as e:
+            log(f"polylines file {el.get('file')}: {e}")
+            return
+    else:
+        data = el
+    if not data:
+        return
+    style = {}
+    style.update(data.get("style") or {})
+    for k in ("color", "outline", "width", "outline_width", "dash",
+              "label", "label_color", "label_box", "label_size", "label_x", "label_y"):
+        if k in el:
+            style[k] = el[k]
+    polys = data.get("polylines") or []
+    if not polys and data.get("points"):
+        polys = [{"points": data["points"]}]
+    col = colour(style.get("color"), (255, 210, 90, 210))
+    outline = colour(style.get("outline"), (0, 0, 0, 200))
+    w = max(1, int(style.get("width", 2) * sc))
+    ow = max(0, int(style.get("outline_width", 4) * sc))
+    dash_spec = style.get("dash") or [14, 8]
+    dash = max(2, int(dash_spec[0] * sc))
+    gap = max(2, int((dash_spec[1] if len(dash_spec) > 1 else dash_spec[0] * 0.6) * sc))
+    all_pts = []
+    for poly in polys:
+        raw = poly.get("points") or []
+        if len(raw) < 2:
+            continue
+        pts = [(float(p[0]) * sc, float(p[1]) * sc) for p in raw]
+        all_pts.extend(pts)
+        if ow:
+            draw_dashed_polyline(d, pts, outline, width=ow, dash=dash, gap=gap)
+        draw_dashed_polyline(d, pts, col, width=w, dash=dash, gap=gap)
+    label = style.get("label") or data.get("label")
+    if label and all_pts:
+        size = max(10, int(style.get("label_size", 14) * sc))
+        fnt = font("bold", size)
+        if "label_x" in style and "label_y" in style:
+            lx = place(style["label_x"], 0, canvas.width, sc)
+            ly = place(style["label_y"], 0, canvas.height, sc)
+        else:
+            cx = sum(p[0] for p in all_pts) / len(all_pts)
+            cy = min(p[1] for p in all_pts) - 22 * sc
+            # prefer right-hand cluster if two sides
+            right = [p for p in all_pts if p[0] > canvas.width * 0.4]
+            if right:
+                cx = sum(p[0] for p in right) / len(right)
+                cy = min(p[1] for p in right) - 22 * sc
+            bb = fnt.getbbox(label)
+            tw = bb[2] - bb[0]
+            lx = int(min(max(8, cx), canvas.width - tw - 16))
+            ly = int(max(8, cy))
+        bb = fnt.getbbox(label)
+        tw, th = bb[2] - bb[0], bb[3] - bb[1]
+        pad = max(3, int(5 * sc))
+        d.rectangle([(lx - pad, ly - pad), (lx + tw + pad, ly + th + pad)],
+                    fill=colour(style.get("label_box"), (0, 0, 0, 150)))
+        d.text((lx, ly), label, font=fnt, fill=colour(style.get("label_color"), (255, 220, 140, 240)))
+
+
+def ensure_shingle_seed() -> None:
+    """Copy default shingle_bar.json into the layout dir once, if missing."""
+    cfg_dir = LAYOUT.parent
+    dest = cfg_dir / "shingle_bar.json"
+    if dest.exists():
+        return
+    for src in (Path("/opt/ayc/shingle_bar.json"), DEFAULT.parent / "shingle_bar.json"):
+        if src.exists():
+            try:
+                cfg_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy(src, dest)
+                log(f"seeded {dest} from {src}")
+            except Exception as e:
+                log(f"could not seed shingle_bar.json: {e}")
+            return
+
+
 # ---------------------------------------------------------------- elements
 def draw_text(canvas, d, el, sc):
     if "text_file" in el:
@@ -236,8 +354,29 @@ def render(layout: dict, mode: str) -> Image.Image:
                     a = img.getchannel("A").point(lambda p: int(p * float(el["opacity"])))
                     img.putalpha(a)
                 draw_box(canvas, el, sc, img)
+            elif typ in ("polyline", "polylines", "shingle"):
+                draw_polylines(canvas, d, el, sc)
         except Exception as e:  # one bad element must not kill the overlay
             log(f"element {el.get('id', '?')} error: {e}")
+    # Auto-draw /config/shingle_bar.json when present and not already in the layout
+    # (keeps upgrades working without hand-editing overlay.json). Explicit
+    # {"id":"shingle","enabled":false} suppresses it.
+    has_shingle = any(
+        e.get("type") in ("polyline", "polylines", "shingle") and e.get("enabled", True) is not False
+        for e in layout.get("elements", [])
+    )
+    suppressed = any(
+        e.get("id") == "shingle" and e.get("enabled") is False
+        for e in layout.get("elements", [])
+    )
+    if not has_shingle and not suppressed:
+        for name in ("shingle_bar.json",):
+            if find_file(name):
+                try:
+                    draw_polylines(canvas, d, {"type": "polylines", "file": name}, sc)
+                except Exception as e:
+                    log(f"auto shingle error: {e}")
+                break
     return canvas
 
 

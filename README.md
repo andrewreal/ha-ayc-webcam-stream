@@ -7,4 +7,4 @@ Install: Settings → Add-ons → Add-on Store → ⋮ → Repositories → add 
 install *AYC Webcam Stream*, set `stream_key`, start, enable Start on boot + Watchdog.
 See [ayc_stream/DOCS.md](ayc_stream/DOCS.md).
 
-
+Current add-on version: **1.0.7** (shingle-bar outline + suggest-only auto-update).

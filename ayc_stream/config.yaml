@@ -1,5 +1,5 @@
 name: AYC Webcam Stream
-version: "1.0.6"
+version: "1.0.7"
 slug: ayc_stream
 description: Axe Yacht Club webcam to YouTube Live, with tide caption, tide chart and offline fallback
 url: https://github.com/andrewreal/ha-ayc-webcam-stream
@@ -19,6 +19,7 @@ options:
   x264_preset: ultrafast
   decode_lowres: 1
   camera_resolution: ""
+  shingle_auto: suggest
 schema:
   stream_key: password
   output_height: int(360,1080)
@@ -27,3 +28,4 @@ schema:
   x264_preset: list(ultrafast|superfast|veryfast)
   decode_lowres: int(0,3)
   camera_resolution: str?
+  shingle_auto: list(off|suggest|apply)

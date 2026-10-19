@@ -22,6 +22,7 @@ automatic fallback loop with an "camera offline" notice when the camera drops.
 | fps | 15 | camera only delivers ~1–2 fps |
 | bitrate_k | 1500 | video bitrate in kbps |
 | x264_preset | ultrafast | `veryfast` gives better quality if CPU allows |
+| shingle_auto | suggest | `off` / `suggest` / `apply` — shingle-bar auto-update (see below) |
 
 ## Notes
 - Tides: UKHO EasyTide Lyme Regis (0028), OpenWaters fallback. Not for navigation.
@@ -81,3 +82,31 @@ detected width and whether lowres is in use.
 The AYC camera sends about 6 frames/s (measured at 1280x720; `&fps=15` is ignored). The add-on
 stamps frames with real time and repeats them to reach the `fps` option, so the stream stays
 real time. Setting `fps` to 6-8 saves CPU and bandwidth with no visible loss.
+
+## Shingle bar outline (1.0.7+)
+A faint amber dashed outline marks the shingle bar at the river mouth so viewers can
+see where it sits even at high tide. The outline lives in **`shingle_bar.json`** next
+to `overlay.json` in the add-on config folder (`/addon_configs/<id>_ayc_stream/`). It is
+seeded on first start from Andrew's hand-drawn outline (19 Oct 2026). Saving that JSON
+updates the stream within ~2–3 s — no add-on restart.
+
+You can also reference it explicitly in `overlay.json`:
+```json
+{"id":"shingle","type":"polylines","file":"shingle_bar.json","show":"always"}
+```
+Set `"enabled": false` on that element to hide it. A matching transparent PNG
+(`shingle_bar.png`) is shipped for optional use as a plain `image` element on older
+builds that do not yet understand `polylines`.
+
+### Auto-update (`shingle_auto`)
+| Value | Behaviour |
+|---|---|
+| `suggest` (default) | Near daylight low tide (±1.5 h, sun up), sample a few live frames, propose a new outline, write it under `shingle_candidates/` with a debug JPEG. Live outline unchanged. |
+| `apply` | Same checks; if they pass, also replace `shingle_bar.json`. |
+| `off` | Detector idle. |
+
+Review suggestions in File editor / Samba, then either copy `shingle_candidates/latest.json`
+over `shingle_bar.json` or switch the option to `apply` once you trust it. Auto-detect is
+deliberately cautious (glare, contrast, shape-change gates) and will often skip or reject
+on bright, glare-heavy afternoons — that is expected.
+

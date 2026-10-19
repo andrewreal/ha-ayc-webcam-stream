@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.7
+- Shingle-bar outline on the live overlay: faint amber dashed polylines with a small
+  "Shingle bar (updated …)" label, read from `shingle_bar.json` in the add-on config
+  folder (seeded from the Andrew-drawn outline of 19 Oct 2026). Edits to that file
+  appear within ~2 s with no restart. New `polylines` / `polyline` / `shingle` element
+  types in `overlay.json`; if the file exists it is also drawn automatically so existing
+  layouts do not need a hand edit.
+- Optional auto-update worker (`shingle_auto`: `off` | `suggest` | `apply`, default
+  `suggest`). Around daylight low tide it samples a few HLS frames, nudges the outline
+  to the waterline in a small ROI, and — in suggest mode — writes a candidate JSON +
+  debug JPEG under `shingle_candidates/` without changing the live outline. `apply`
+  promotes a passing candidate to `shingle_bar.json`. Glare, low contrast and large
+  shape-change checks reject bad frames. Light Pillow-only code; runs every 10 min and
+  self-limits to roughly once per tide window.
+
 ## 1.0.6
 - Fix the frozen YouTube picture (push repeating one frame forever, `dup=` climbing,
   "More than 1000 frames duplicated"). Reproduced locally: when the ingest ffmpeg restarts

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Keep every worker running; restart any that dies. Exit cleanly on SIGTERM.
-WORKERS=(caption.sh overlay.sh ingest.sh record_clip.sh push.sh)
+WORKERS=(caption.sh overlay.sh ingest.sh record_clip.sh push.sh shingle_detect.sh)
 declare -A PIDS
 start(){ setsid "/usr/bin/$1" & PIDS[$1]=$!; echo "$(date '+%F %T %Z') [supervisor] started $1 (pid ${PIDS[$1]})"; }
 stop_all(){
