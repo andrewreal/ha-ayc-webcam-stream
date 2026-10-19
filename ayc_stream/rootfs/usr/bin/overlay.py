@@ -275,21 +275,48 @@ def draw_polylines(canvas, d, el, sc):
         d.text((lx, ly), label, font=fnt, fill=colour(style.get("label_color"), (255, 220, 140, 240)))
 
 
+# Built-in outline (Andrew's hand-drawn bar, 19 Oct 2026). Used when the
+# image copy under /opt/ayc is missing so seeding never silently no-ops.
+DEFAULT_SHINGLE_JSON = """{"updated":"2026-10-19","label":"Shingle bar (updated 19 Oct)","ref_width":1280,"ref_height":720,"style":{"color":"#FFD25AD2","outline":"#000000C8","width":2,"outline_width":4,"dash":[14,8],"label_color":"#FFDC8CF0","label_box":"#00000096"},"polylines":[{"id":"left","points":[[140.4,591.7],[156.1,573.9],[214.5,544.2],[233.3,539.0],[275.0,519.1],[381.5,486.3],[431.6,484.2],[432.6,500.9],[397.7,517.0],[390.3,539.5],[371.0,561.4]]},{"id":"right","points":[[523.9,561.9],[522.3,501.4],[525.0,493.0],[536.4,485.7],[601.1,478.4],[629.8,469.0],[709.1,462.8],[755.6,452.9]]}]}"""
+
+
+def shingle_dest() -> Path:
+    """Prefer /config (addon_configs) when present; else next to the layout file."""
+    if Path("/config").is_dir():
+        return Path("/config/shingle_bar.json")
+    return LAYOUT.parent / "shingle_bar.json"
+
+
 def ensure_shingle_seed() -> None:
-    """Copy default shingle_bar.json into the layout dir once, if missing."""
-    cfg_dir = LAYOUT.parent
-    dest = cfg_dir / "shingle_bar.json"
-    if dest.exists():
+    """Create shingle_bar.json in the add-on config folder if missing.
+
+    Always logs the outcome. Falls back to an embedded default when
+    /opt/ayc/shingle_bar.json was not baked into the image (the 1.0.7 failure mode).
+    """
+    dest = shingle_dest()
+    if dest.exists() and dest.stat().st_size > 0:
         return
-    for src in (Path("/opt/ayc/shingle_bar.json"), DEFAULT.parent / "shingle_bar.json"):
-        if src.exists():
+    cfg_dir = dest.parent
+    try:
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        log(f"shingle seed: cannot create {cfg_dir}: {e}")
+        return
+    srcs = [Path("/opt/ayc/shingle_bar.json"), DEFAULT.parent / "shingle_bar.json"]
+    for src in srcs:
+        if src.exists() and src.stat().st_size > 0:
             try:
-                cfg_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy(src, dest)
                 log(f"seeded {dest} from {src}")
+                return
             except Exception as e:
-                log(f"could not seed shingle_bar.json: {e}")
-            return
+                log(f"shingle seed copy from {src} failed: {e}")
+    # Embedded fallback — must not silently skip
+    try:
+        dest.write_text(DEFAULT_SHINGLE_JSON + "\n", encoding="utf-8")
+        log(f"seeded {dest} from embedded default (no /opt/ayc/shingle_bar.json in image)")
+    except Exception as e:
+        log(f"shingle seed embedded write failed: {e}")
 
 
 # ---------------------------------------------------------------- elements
@@ -412,6 +439,7 @@ def main() -> int:
     while True:
         t = time.time()
         try:
+            ensure_shingle_seed()
             layout = load_layout()
             atomic_png(render(layout, "live"), DIR / "overlay_live.png")
             atomic_png(render(layout, "offline"), DIR / "overlay_offline.png")

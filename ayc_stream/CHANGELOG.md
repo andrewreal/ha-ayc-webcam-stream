@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.8
+- Fix shingle-bar seed never creating `/config/shingle_bar.json` on first 1.0.7 start.
+  `ensure_shingle_seed()` previously returned with **no log** when `/opt/ayc/shingle_bar.json`
+  was absent from the container image, so the detector logged `no outline` and nothing was
+  drawn. Seed now: (1) runs from `run.sh` before workers start, (2) retries every overlay
+  tick, (3) falls back to an **embedded** copy of the 19 Oct outline if the image file is
+  missing, and (4) always logs success or failure. `shingle_detect` also seeds the embedded
+  default instead of exiting when the file is absent.
+
 ## 1.0.7
 - Shingle-bar outline on the live overlay: faint amber dashed polylines with a small
   "Shingle bar (updated …)" label, read from `shingle_bar.json` in the add-on config

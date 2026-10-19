@@ -18,5 +18,16 @@ mkdir -p /data "$HLS_DIR"
 # Layout lives in the add-on config folder (HA: /addon_configs/<id>_ayc_stream/) so it can be edited with File editor/Samba
 if [ -d /config ]; then export AYC_LAYOUT=/config/overlay.json; fi
 [ -s /data/fallback.mp4 ] || cp /opt/ayc/fallback.mp4 /data/fallback.mp4
+# Seed shingle outline into addon config (/config) before workers start.
+# overlay.py also seeds (with embedded fallback); this covers the common path early.
+if [ -d /config ] && [ ! -s /config/shingle_bar.json ]; then
+  if [ -s /opt/ayc/shingle_bar.json ]; then
+    cp /opt/ayc/shingle_bar.json /config/shingle_bar.json \
+      && bashio::log.info "seeded /config/shingle_bar.json from /opt/ayc" \
+      || bashio::log.warning "could not seed shingle_bar.json from /opt/ayc"
+  else
+    bashio::log.warning "/opt/ayc/shingle_bar.json missing from image — overlay.py will write embedded default"
+  fi
+fi
 bashio::log.info "Starting AYC stream ${OUTPUT_HEIGHT}p@${FPS} ${BITRATE_K}k (preset ${X264_PRESET})"
 exec /usr/bin/supervise.sh

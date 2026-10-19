@@ -88,7 +88,8 @@ A faint amber dashed outline marks the shingle bar at the river mouth so viewers
 see where it sits even at high tide. The outline lives in **`shingle_bar.json`** next
 to `overlay.json` in the add-on config folder (`/addon_configs/<id>_ayc_stream/`). It is
 seeded on first start from Andrew's hand-drawn outline (19 Oct 2026). Saving that JSON
-updates the stream within ~2–3 s — no add-on restart.
+updates the stream within ~2–3 s — no add-on restart. Creating the file
+while the add-on is already running is enough: `overlay.py` re-reads it every 2 s.
 
 You can also reference it explicitly in `overlay.json`:
 ```json

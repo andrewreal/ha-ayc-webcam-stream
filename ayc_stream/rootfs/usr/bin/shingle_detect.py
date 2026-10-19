@@ -38,6 +38,8 @@ OUT_H = int(os.environ.get("OUTPUT_HEIGHT", "720"))
 OUT_W = (OUT_H * 16 // 9 + 1) // 2 * 2
 MODE = os.environ.get("SHINGLE_AUTO", "suggest").strip().lower() or "suggest"
 
+DEFAULT_SHINGLE_JSON = """{"updated":"2026-10-19","label":"Shingle bar (updated 19 Oct)","ref_width":1280,"ref_height":720,"style":{"color":"#FFD25AD2","outline":"#000000C8","width":2,"outline_width":4,"dash":[14,8],"label_color":"#FFDC8CF0","label_box":"#00000096"},"polylines":[{"id":"left","points":[[140.4,591.7],[156.1,573.9],[214.5,544.2],[233.3,539.0],[275.0,519.1],[381.5,486.3],[431.6,484.2],[432.6,500.9],[397.7,517.0],[390.3,539.5],[371.0,561.4]]},{"id":"right","points":[[523.9,561.9],[522.3,501.4],[525.0,493.0],[536.4,485.7],[601.1,478.4],[629.8,469.0],[709.1,462.8],[755.6,452.9]]}]}"""
+
 # Timing gates
 LW_WINDOW_H = 1.5          # ± hours around low water
 MIN_GAP_BETWEEN_RUNS_S = 90 * 60  # don't re-run more than once per ~1.5 h
@@ -465,8 +467,18 @@ def main(argv: list[str] | None = None) -> int:
 
     outline = load_outline(OUTLINE)
     if not outline:
-        log(f"no outline at {OUTLINE}")
-        return 2
+        # Seed embedded default so detector and overlay can proceed (1.0.8+)
+        try:
+            OUTLINE.parent.mkdir(parents=True, exist_ok=True)
+            if not OUTLINE.exists() or OUTLINE.stat().st_size == 0:
+                OUTLINE.write_text(DEFAULT_SHINGLE_JSON + "\n", encoding="utf-8")
+                log(f"seeded {OUTLINE} from embedded default")
+            outline = load_outline(OUTLINE)
+        except Exception as e:
+            log(f"could not seed outline at {OUTLINE}: {e}")
+        if not outline:
+            log(f"no outline at {OUTLINE}")
+            return 2
 
     if not args.image and not gates_ok(force=args.force):
         return 0
